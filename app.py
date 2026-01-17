@@ -17,19 +17,33 @@ if uploaded_file is not None:
 
     img_rgb = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
-    mp_face = mp.solutions.face_detection
-    face_detection = mp_face.FaceDetection(model_selection=0, min_detection_confidence=0.5)
+    mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(
+    static_image_mode=True,
+    max_num_faces=5,
+    refine_landmarks=True,
+    min_detection_confidence=0.5
+)
 
-    results = face_detection.process(img_rgb)
 
-    if results.detections:
-        for detection in results.detections:
-            bbox = detection.location_data.relative_bounding_box
-            h, w, _ = img_array.shape
-            x, y = int(bbox.xmin * w), int(bbox.ymin * h)
-            bw, bh = int(bbox.width * w), int(bbox.height * h)
+   results = face_mesh.process(img_rgb)
 
-            cv2.rectangle(img_array, (x, y), (x + bw, y + bh), (0, 255, 0), 2)
+h, w, _ = img_array.shape
+
+if results.multi_face_landmarks:
+    for face_landmarks in results.multi_face_landmarks:
+        xs = [int(lm.x * w) for lm in face_landmarks.landmark]
+        ys = [int(lm.y * h) for lm in face_landmarks.landmark]
+
+        x_min, x_max = min(xs), max(xs)
+        y_min, y_max = min(ys), max(ys)
+
+        cv2.rectangle(img_array, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+
+    st.success("Rosto detectado com sucesso!")
+else:
+    st.warning("Nenhum rosto detectado.")
+
 
         st.success("Rosto detectado com sucesso!")
     else:
