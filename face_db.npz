@@ -1,3 +1,0 @@
-if os.path.exists(DB_FILE):
-    return dict(np.load(DB_FILE))
-return {}
