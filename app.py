@@ -113,34 +113,34 @@ if arquivo2:
     img_np = np.array(img)
     img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
 
-    rosto, box = detectar_rosto(img_bgr)
+    rostos = detectar_rostos(img_bgr)
 
-    if rosto is None:
+    if not rostos:
         st.error("❌ Nenhum rosto detectado.")
     elif not db:
         st.warning("⚠️ Nenhum rosto cadastrado ainda.")
     else:
-        hist = extrair_histograma(rosto)
+        for rosto, (x, y, w, h) in rostos:
+            hist = extrair_histograma(rosto)
 
-        melhor_nome = "Desconhecido"
-        melhor_score = 0
+            melhor_nome = "Desconhecido"
+            melhor_score = 0
 
-        for nome_db, hist_db in db.items():
-            score = cv2.compareHist(hist, hist_db, cv2.HISTCMP_CORREL)
-            if score > melhor_score:
-                melhor_score = score
-                melhor_nome = nome_db
+            for nome_db, hist_db in db.items():
+                score = cv2.compareHist(hist, hist_db, cv2.HISTCMP_CORREL)
+                if score > melhor_score:
+                    melhor_score = score
+                    melhor_nome = nome_db
 
-        x, y, w, h = box
-        cv2.rectangle(img_bgr, (x, y), (x+w, y+h), (0, 255, 0), 2)
-        cv2.putText(
-            img_bgr,
-            f"{melhor_nome} ({melhor_score*100:.1f}%)",
-            (x, y - 10),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (0, 255, 0),
-            2
-        )
+            cv2.rectangle(img_bgr, (x, y), (x+w, y+h), (0, 255, 0), 2)
+            cv2.putText(
+                img_bgr,
+                f"{melhor_nome} ({melhor_score*100:.1f}%)",
+                (x, y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 0),
+                2
+            )
 
         st.image(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), width=300)
