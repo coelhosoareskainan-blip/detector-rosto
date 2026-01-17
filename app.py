@@ -22,18 +22,20 @@ def load_db():
 def save_db(db):
     np.savez(DB_FILE, **db)
 
-def detectar_rosto(img_bgr):
+def detectar_rostos(img_bgr):
     gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
     face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
-    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
+    faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+    rostos = []
 
-    if len(faces) == 0:
-        return None, None
+    for (x, y, w, h) in faces:
+        rosto = img_bgr[y:y+h, x:x+w]
+        rostos.append((rosto, (x, y, w, h)))
 
-    x, y, w, h = faces[0]
-    return img_bgr[y:y+h, x:x+w], (x, y, w, h)
+    return rostos
+
 
 def extrair_histograma(rosto):
     hist = cv2.calcHist(
