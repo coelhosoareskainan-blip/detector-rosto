@@ -15,13 +15,13 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
     img_array = np.array(image)
 
-    # Corrige imagens com canal alpha (PNG)
+    # Corrige imagens PNG com canal alpha
     if img_array.shape[2] == 4:
         img_array = cv2.cvtColor(img_array, cv2.COLOR_BGRA2BGR)
 
     img_rgb = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
 
-    # Face Mesh (compatível com Streamlit Cloud)
+    # ✅ NOME CORRETO: face_mesh
     mp_face_mesh = mp.solutions.face_mesh
     face_mesh = mp_face_mesh.FaceMesh(
         static_image_mode=True,
