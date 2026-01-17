@@ -156,5 +156,6 @@ else:
             if st.button("❌", key=f"del_{nome}"):
                 del db[nome]
                 save_db(db)
-                st.experimental_rerun()
+                st.rerun()
+
 
