@@ -2,103 +2,72 @@ import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
-import av
 import os
-from auth import login
 
-st.set_page_config("Reconhecimento Facial", layout="wide")
+st.set_page_config(page_title="Detector de Rosto", layout="centered")
+st.title("🧠 Detector de Rosto – Upload de Imagem")
 
-if not login():
-    st.stop()
+DB_FILE = "face_db.npz"
 
-st.title("Sistema de Reconhecimento Facial • MVP")
-
-DB_FILE = "faces_db.npz"
-THRESHOLD = 0.65
+# ======================
+# UTILIDADES
+# ======================
 
 def load_db():
     if os.path.exists(DB_FILE):
-        return dict(np.load(DB_FILE, allow_pickle=True))
+        data = np.load(DB_FILE, allow_pickle=True)
+        return dict(data)
     return {}
 
 def save_db(db):
     np.savez(DB_FILE, **db)
 
-def detectar_rostos(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    cascade = cv2.CascadeClassifier(
+def detectar_rosto(img_bgr):
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    face_cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
-    return cascade.detectMultiScale(gray, 1.1, 5)
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
 
-def histograma(face):
-    hist = cv2.calcHist([face], [0, 1, 2], None,
-                        [8, 8, 8], [0, 256]*3)
+    if len(faces) == 0:
+        return None, None
+
+    x, y, w, h = faces[0]
+    return img_bgr[y:y+h, x:x+w], (x, y, w, h)
+
+def extrair_histograma(rosto):
+    hist = cv2.calcHist(
+        [rosto], [0, 1, 2], None,
+        [8, 8, 8],
+        [0, 256, 0, 256, 0, 256]
+    )
     cv2.normalize(hist, hist)
     return hist
 
 db = load_db()
 
-# 🧑‍💻 DASHBOARD
-st.sidebar.header("📊 Dashboard")
-st.sidebar.write(f"Total de rostos: {len(db)}")
+# ======================
+# CADASTRO
+# ======================
 
-if st.sidebar.button("🗑️ Limpar banco"):
-    db.clear()
-    save_db(db)
-    st.sidebar.success("Banco limpo")
-
-# 🅱️ CADASTRO
 st.header("🅱️ Cadastro de rosto")
-name = st.text_input("Nome")
-file = st.file_uploader("Imagem", type=["jpg", "jpeg", "png"])
 
-if file and name:
-    img = cv2.cvtColor(
-        np.array(Image.open(file).convert("RGB")),
-        cv2.COLOR_RGB2BGR
-    )
-    faces = detectar_rostos(img)
+nome = st.text_input("Nome da pessoa")
+arquivo = st.file_uploader("Envie uma imagem", type=["jpg", "jpeg", "png"])
 
-    if len(faces) == 0:
-        st.error("Nenhum rosto detectado")
+if arquivo and nome:
+    img = Image.open(arquivo).convert("RGB")
+    img_np = np.array(img)
+    img_bgr = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+
+    rosto, box = detectar_rosto(img_bgr)
+
+    if rosto is None:
+        st.error("❌ Nenhum rosto detectado.")
     else:
-        x, y, w, h = faces[0]
-        face = cv2.resize(img[y:y+h, x:x+w], (200, 200))
-        db[name] = histograma(face)
+        hist = extrair_histograma(rosto)
+        db[nome] = hist
         save_db(db)
-        st.success("Rosto cadastrado!")
-        st.image(face, channels="BGR", width=200)
 
-# 🎥 WEBCAM
-st.header("🎥 Reconhecimento em tempo real")
-
-class Processor(VideoProcessorBase):
-    def recv(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-        faces = detectar_rostos(img)
-
-        for (x, y, w, h) in faces:
-            face = cv2.resize(img[y:y+h, x:x+w], (200, 200))
-            hist = histograma(face)
-
-            best, score = "Desconhecido", 0
-            for name, ref in db.items():
-                s = cv2.compareHist(hist, ref, cv2.HISTCMP_CORREL)
-                if s > score:
-                    best, score = name, s
-
-            label = best if score > THRESHOLD else "Desconhecido"
-            cv2.rectangle(img, (x,y), (x+w,y+h), (0,255,0), 2)
-            cv2.putText(img, f"{label} {score*100:.1f}%",
-                        (x,y-10), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.8, (0,255,0), 2)
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-webrtc_streamer(
-    key="cam",
-    video_processor_factory=Processor,
-    media_stream_constraints={"video": True, "audio": False}
-)
+        x, y, w, h = box
+        cv2.rectangle(img_bgr, (x, y), (x+w, y+h)_
