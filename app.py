@@ -157,5 +157,62 @@ else:
                 del db[nome]
                 save_db(db)
                 st.rerun()
+                
+# =====================
+# WEBCAM AO VIVO
+# =====================
 
+st.divider()
+st.header("🎥 Webcam ao vivo (opcional)")
 
+try:
+    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+    import av
+
+    class VideoProcessor(VideoProcessorBase):
+        def recv(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+
+            rostos = detectar_rostos(img)
+
+            if db and rostos:
+                for rosto, (x, y, w, h) in rostos:
+                    hist = extrair_histograma(rosto)
+
+                    melhor_nome = "Desconhecido"
+                    melhor_score = 0
+
+                    for nome_db, hist_db in db.items():
+                        score = cv2.compareHist(
+                            hist, hist_db, cv2.HISTCMP_CORREL
+                        )
+                        if score > melhor_score:
+                            melhor_score = score
+                            melhor_nome = nome_db
+
+                    cv2.rectangle(
+                        img, (x, y), (x+w, y+h), (0, 255, 0), 2
+                    )
+                    cv2.putText(
+                        img,
+                        f"{melhor_nome} ({melhor_score*100:.1f}%)",
+                        (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 0),
+                        2
+                    )
+
+            return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+    webrtc_streamer(
+        key="webcam",
+        video_processor_factory=VideoProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+    )
+
+except Exception as e:
+    st.warning(
+        "⚠️ Webcam indisponível neste ambiente. "
+        "Use localmente com `streamlit run app.py`."
+    )
