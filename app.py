@@ -135,3 +135,26 @@ if arquivo2:
             )
 
         st.image(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), width=300)
+        
+# =====================
+# DASHBOARD
+# =====================
+
+st.divider()
+st.header("📊 Dashboard")
+
+if not db:
+    st.info("Nenhum rosto cadastrado ainda.")
+else:
+    st.write(f"Total de rostos cadastrados: {len(db)}")
+
+    for nome in list(db.keys()):
+        col1, col2 = st.columns([4, 1])
+        with col1:
+            st.write(nome)
+        with col2:
+            if st.button("❌", key=f"del_{nome}"):
+                del db[nome]
+                save_db(db)
+                st.experimental_rerun()
+
