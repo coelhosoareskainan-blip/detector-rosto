@@ -122,7 +122,11 @@ if arquivo2:
                 score = cv2.compareHist(hist, hist_db, cv2.HISTCMP_CORREL)
                 if score > melhor_score:
                     melhor_score = score
-                    melhor_nome = nome_db
+                    if melhor_score >= LIMIAR:
+                        melhor_nome = nome_db
+                    else:
+                        melhor_nome = "Desconhecido"
+
 
             cv2.rectangle(img_bgr, (x, y), (x+w, y+h), (0, 255, 0), 2)
             cv2.putText(
@@ -189,7 +193,11 @@ try:
                         )
                         if score > melhor_score:
                             melhor_score = score
-                            melhor_nome = nome_db
+                            if melhor_score >= LIMIAR:
+                                melhor_nome = nome_db
+                            else:
+                                melhor_nome = "Desconhecido"
+
 
                     cv2.rectangle(
                         img, (x, y), (x+w, y+h), (0, 255, 0), 2
