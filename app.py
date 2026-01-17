@@ -5,86 +5,129 @@ from PIL import Image
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import av
 import os
+import hashlib
 
-st.set_page_config(page_title="Reconhecimento Facial", layout="centered")
-st.title("Reconhecimento Facial • Webcam + Banco")
+st.set_page_config(page_title="Reconhecimento Facial", layout="wide")
 
+# =========================
+# LOGIN SIMPLES (EM MEMÓRIA)
+# =========================
+def check_login():
+    if "auth" not in st.session_state:
+        st.session_state.auth = False
+
+    st.sidebar.title("Login")
+
+    user = st.sidebar.text_input("Usuário")
+    pwd = st.sidebar.text_input("Senha", type="password")
+
+    if st.sidebar.button("Entrar"):
+        if user == "admin" and hashlib.sha256(pwd.encode()).hexdigest() == hashlib.sha256("1234".encode()).hexdigest():
+            st.session_state.auth = True
+        else:
+            st.sidebar.error("Usuário ou senha inválidos")
+
+    return st.session_state.auth
+
+
+if not check_login():
+    st.stop()
+
+# =========================
+# CONFIGURAÇÕES
+# =========================
 DB_FILE = "faces_db.npz"
+THRESHOLD = 0.65
 
+# =========================
+# FUNÇÕES
+# =========================
 def load_db():
     if os.path.exists(DB_FILE):
-        data = np.load(DB_FILE, allow_pickle=True)
-        return dict(data)
+        return dict(np.load(DB_FILE, allow_pickle=True))
     return {}
 
 def save_db(db):
     np.savez(DB_FILE, **db)
 
-def detectar_rosto(img):
+def detectar_rostos(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    face_cascade = cv2.CascadeClassifier(
+    cascade = cv2.CascadeClassifier(
         cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
     )
-    faces = face_cascade.detectMultiScale(gray, 1.1, 5)
-    if len(faces) == 0:
-        return None
-    x, y, w, h = faces[0]
-    rosto = img[y:y+h, x:x+w]
-    return cv2.resize(rosto, (200, 200))
+    return cascade.detectMultiScale(gray, 1.1, 5)
 
-def histograma(img):
-    hist = cv2.calcHist([img], [0, 1, 2], None, [8, 8, 8],
-                        [0, 256, 0, 256, 0, 256])
+def histograma(face):
+    hist = cv2.calcHist([face], [0, 1, 2], None,
+                        [8, 8, 8], [0, 256, 0, 256, 0, 256])
     cv2.normalize(hist, hist)
     return hist
 
 db = load_db()
 
+# =========================
+# DASHBOARD
+# =========================
+st.sidebar.header("📊 Dashboard")
+st.sidebar.write(f"Rostos cadastrados: {len(db)}")
+
+if st.sidebar.button("🗑️ Limpar banco"):
+    db.clear()
+    save_db(db)
+    st.sidebar.success("Banco limpo")
+
+# =========================
+# CADASTRO
+# =========================
 st.header("🅱️ Cadastro de rosto")
-nome = st.text_input("Nome da pessoa")
-img_file = st.file_uploader("Imagem para cadastro", type=["jpg", "jpeg", "png"])
 
-if img_file and nome:
-    img = np.array(Image.open(img_file).convert("RGB"))
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    rosto = detectar_rosto(img)
+name = st.text_input("Nome da pessoa")
+file = st.file_uploader("Imagem para cadastro", type=["jpg", "jpeg", "png"])
 
-    if rosto is None:
-        st.error("Nenhum rosto detectado.")
+if file and name:
+    img = cv2.cvtColor(
+        np.array(Image.open(file).convert("RGB")),
+        cv2.COLOR_RGB2BGR
+    )
+
+    faces = detectar_rostos(img)
+
+    if len(faces) == 0:
+        st.error("Nenhum rosto detectado")
     else:
-        db[nome] = histograma(rosto)
+        x, y, w, h = faces[0]
+        face = cv2.resize(img[y:y+h, x:x+w], (200, 200))
+        db[name] = histograma(face)
         save_db(db)
-        st.success(f"Rosto de '{nome}' cadastrado com sucesso!")
-        st.image(rosto, channels="BGR", width=200)
+        st.success("Rosto cadastrado com sucesso")
+        st.image(face, channels="BGR", width=200)
 
-st.divider()
-st.header("🅰️ Webcam • Reconhecimento em tempo real")
+# =========================
+# WEBCAM - RECONHECIMENTO
+# =========================
+st.header("🎥 Reconhecimento em tempo real")
 
-class VideoProcessor(VideoProcessorBase):
+class Processor(VideoProcessorBase):
     def recv(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        rosto = detectar_rosto(img)
+        faces = detectar_rostos(img)
 
-        if rosto is not None and db:
-            hist = histograma(rosto)
+        for (x, y, w, h) in faces:
+            face = cv2.resize(img[y:y+h, x:x+w], (200, 200))
+            hist = histograma(face)
+
             best_name = "Desconhecido"
             best_score = 0
 
-            for name, ref_hist in db.items():
-                score = cv2.compareHist(hist, ref_hist, cv2.HISTCMP_CORREL)
+            for name, ref in db.items():
+                score = cv2.compareHist(hist, ref, cv2.HISTCMP_CORREL)
                 if score > best_score:
-                    best_score = score
                     best_name = name
+                    best_score = score
 
-            label = f"{best_name} ({best_score*100:.1f}%)"
-            cv2.putText(img, label, (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 1,
-                        (0, 255, 0), 2)
+            label = best_name if best_score > THRESHOLD else "Desconhecido"
 
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-webrtc_streamer(
-    key="face-recognition",
-    video_processor_factory=VideoProcessor,
-    media_stream_constraints={"video": True, "audio": False},
-)
+            cv2.rectangle(img, (x,y), (x+w,y+h), (0,255,0), 2)
+            cv2.putText(
+                img,
+                f"{label} {best_score*100:.1f}%",
