@@ -1,4 +1,5 @@
 LIMIAR = 0.7
+
 import streamlit as st
 import cv2
 import numpy as np
@@ -116,17 +117,17 @@ if arquivo2:
             hist = extrair_histograma(rosto)
 
             melhor_nome = "Desconhecido"
-            melhor_score = 0
+            melhor_score = -1
 
             for nome_db, hist_db in db.items():
                 score = cv2.compareHist(hist, hist_db, cv2.HISTCMP_CORREL)
                 if score > melhor_score:
                     melhor_score = score
-                    if melhor_score >= LIMIAR:
-                        melhor_nome = nome_db
-                    else:
-                        melhor_nome = "Desconhecido"
+                    melhor_nome = nome_db
 
+            # ✅ decisão FINAL (fora do loop)
+            if melhor_score < LIMIAR:
+                melhor_nome = "Desconhecido"
 
             cv2.rectangle(img_bgr, (x, y), (x+w, y+h), (0, 255, 0), 2)
             cv2.putText(
@@ -140,7 +141,7 @@ if arquivo2:
             )
 
         st.image(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB), width=300)
-        
+
 # =====================
 # DASHBOARD
 # =====================
@@ -155,14 +156,12 @@ else:
 
     for nome in list(db.keys()):
         col1, col2 = st.columns([4, 1])
-        with col1:
-            st.write(nome)
-        with col2:
-            if st.button("❌", key=f"del_{nome}"):
-                del db[nome]
-                save_db(db)
-                st.rerun()
-                
+        col1.write(nome)
+        if col2.button("❌", key=f"del_{nome}"):
+            del db[nome]
+            save_db(db)
+            st.rerun()
+
 # =====================
 # WEBCAM AO VIVO
 # =====================
@@ -177,7 +176,6 @@ try:
     class VideoProcessor(VideoProcessorBase):
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
-
             rostos = detectar_rostos(img)
 
             if db and rostos:
@@ -185,7 +183,7 @@ try:
                     hist = extrair_histograma(rosto)
 
                     melhor_nome = "Desconhecido"
-                    melhor_score = 0
+                    melhor_score = -1
 
                     for nome_db, hist_db in db.items():
                         score = cv2.compareHist(
@@ -193,11 +191,10 @@ try:
                         )
                         if score > melhor_score:
                             melhor_score = score
-                            if melhor_score >= LIMIAR:
-                                melhor_nome = nome_db
-                            else:
-                                melhor_nome = "Desconhecido"
+                            melhor_nome = nome_db
 
+                    if melhor_score < LIMIAR:
+                        melhor_nome = "Desconhecido"
 
                     cv2.rectangle(
                         img, (x, y), (x+w, y+h), (0, 255, 0), 2
@@ -220,7 +217,7 @@ try:
         media_stream_constraints={"video": True, "audio": False},
     )
 
-except Exception as e:
+except Exception:
     st.warning(
         "⚠️ Webcam indisponível neste ambiente. "
         "Use localmente com `streamlit run app.py`."
