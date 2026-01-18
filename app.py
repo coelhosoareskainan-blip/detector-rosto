@@ -12,7 +12,9 @@ st.set_page_config(page_title="Reconhecimento Facial IA", layout="centered")
 st.title("🧠 Reconhecimento Facial (IA Real)")
 
 DB_FILE = "face_db.npz"
-LIMIAR = 0.6  # quanto MENOR, mais rigoroso
+LIMIAR = 0.6
+
+IS_CLOUD = os.getenv("STREAMLIT_CLOUD") is not None
 
 # =====================
 # BANCO DE DADOS
@@ -57,7 +59,7 @@ if arquivo and nome:
     img = Image.open(arquivo).convert("RGB")
     img_np = np.array(img)
 
-    embeddings, locais = detectar_e_extrair(img_np)
+    embeddings, _ = detectar_e_extrair(img_np)
 
     if not embeddings:
         st.error("❌ Nenhum rosto detectado.")
@@ -83,14 +85,14 @@ if arquivo2:
     img = Image.open(arquivo2).convert("RGB")
     img_np = np.array(img)
 
-    embeddings, locais = detectar_e_extrair(img_np)
+    embeddings, _ = detectar_e_extrair(img_np)
 
     if not embeddings:
         st.error("❌ Nenhum rosto detectado.")
     elif not db:
         st.warning("⚠️ Nenhum rosto cadastrado.")
     else:
-        for emb, (top, right, bottom, left) in zip(embeddings, locais):
+        for emb in embeddings:
             melhor_nome = "Desconhecido"
             melhor_dist = 1.0
 
@@ -103,7 +105,7 @@ if arquivo2:
             if melhor_dist > LIMIAR:
                 melhor_nome = "Desconhecido"
 
-            st.write(f"👤 {melhor_nome} | distância: {melhor_dist:.3f}")
+            st.success(f"👤 {melhor_nome} | distância: {melhor_dist:.3f}")
 
 # =====================
 # DASHBOARD
@@ -116,6 +118,7 @@ if not db:
     st.info("Nenhum rosto cadastrado ainda.")
 else:
     st.write(f"Total de rostos cadastrados: {len(db)}")
+
     for nome in list(db.keys()):
         col1, col2 = st.columns([4, 1])
         col1.write(nome)
@@ -125,46 +128,14 @@ else:
             st.rerun()
 
 # =====================
-# WEBCAM AO VIVO
+# WEBCAM
 # =====================
 
 st.divider()
-st.header("🎥 Webcam ao vivo")
+st.header("🎥 Webcam")
 
-try:
-    from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
-    import av
-
-    class VideoProcessor(VideoProcessorBase):
-        def recv(self, frame):
-            img = frame.to_ndarray(format="rgb24")
-
-            embeddings, locais = detectar_e_extrair(img)
-
-            for emb, (top, right, bottom, left) in zip(embeddings, locais):
-                melhor_nome = "Desconhecido"
-                melhor_dist = 1.0
-
-                for nome_db, emb_db in db.items():
-                    d = distancia(emb, emb_db)
-                    if d < melhor_dist:
-                        melhor_dist = d
-                        melhor_nome = nome_db
-
-                if melhor_dist > LIMIAR:
-                    melhor_nome = "Desconhecido"
-
-                img[top:top+2, left:right] = [0, 255, 0]
-
-            return av.VideoFrame.from_ndarray(img, format="rgb24")
-
-    webrtc_streamer(
-        key="webcam",
-        video_processor_factory=VideoProcessor,
-        media_stream_constraints={"video": True, "audio": False},
-    )
-
-except Exception:
-    st.warning(
-        "⚠️ Webcam disponível apenas localmente."
-    )
+if IS_CLOUD:
+    st.warning("🚫 Webcam desativada no Streamlit Cloud")
+else:
+    st.info("✅ Rode localmente para usar webcam:")
+    st.code("streamlit run app.py")
