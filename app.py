@@ -122,13 +122,13 @@ if not db:
 else:
     st.write(f"Total de rostos cadastrados: {len(db)}")
 
-    for nome in list(db.keys()):
-        col1, col2 = st.columns([4, 1])
-        col1.write(nome)
-        if col2.button("❌", key=f"del_{nome}"):
-            del db[nome]
-            save_db(db)
-            st.rerun()
+    for nome in nomes:
+    col1, col2 = st.columns([4, 1])
+    col1.write(nome)
+
+    if col2.button("❌", key=f"del_{nome}"):
+        st.session_state.delete_name = nome
+
 
 # =====================
 # WEBCAM
