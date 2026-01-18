@@ -92,12 +92,27 @@ if arquivo and nome:
     else:
         embedding = get_embedding(arquivo)
 
-        if embedding is None:
-            st.error("❌ IA não conseguiu extrair o rosto.")
-        else:
-            db[nome] = embedding
-            save_json(DB_FILE, db)
-            st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
+       else:
+    db[nome] = embedding
+    save_json(DB_FILE, db)
+
+    # desenhar rosto detectado
+    for (x, y, w, h) in faces:
+        cv2.rectangle(
+            img_np,
+            (x, y),
+            (x + w, y + h),
+            (0, 255, 0),
+            2
+        )
+
+    st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
+    st.image(
+        img_np,
+        caption=f"Rosto cadastrado: {nome}",
+        use_column_width=True
+    )
+
 
 # =====================
 # RECONHECIMENTO
