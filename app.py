@@ -5,6 +5,20 @@ from PIL import Image
 import os
 import cv2
 import json
+from datetime import datetime
+
+HISTORY_FILE = "history.json"
+
+def load_history():
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return []
+
+def save_history(data):
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
 
 # =====================
 # CONFIG
