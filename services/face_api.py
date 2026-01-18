@@ -40,4 +40,12 @@ def get_embedding(uploaded_file):
         embedding.append(point["x"])
         embedding.append(point["y"])
 
-    return np.array(embedding).tolist()
+    vec = np.array(embedding, dtype=np.float32)
+
+# normalização (ESSENCIAL)
+norm = np.linalg.norm(vec)
+if norm == 0:
+    return None
+
+vec = vec / norm
+return vec.tolist()
