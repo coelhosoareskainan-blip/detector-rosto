@@ -92,27 +92,28 @@ if arquivo and nome:
     else:
         embedding = get_embedding(arquivo)
 
-       else:
-    db[nome] = embedding
-    save_json(DB_FILE, db)
+        if embedding is None:
+            st.error("❌ IA não conseguiu extrair o rosto.")
+        else:
+            db[nome] = embedding
+            save_json(DB_FILE, db)
 
-    # desenhar rosto detectado
-    for (x, y, w, h) in faces:
-        cv2.rectangle(
-            img_np,
-            (x, y),
-            (x + w, y + h),
-            (0, 255, 0),
-            2
-        )
+            # desenhar rosto
+            for (x, y, w, h) in faces:
+                cv2.rectangle(
+                    img_np,
+                    (x, y),
+                    (x + w, y + h),
+                    (0, 255, 0),
+                    2
+                )
 
-    st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
-    st.image(
-        img_np,
-        caption=f"Rosto cadastrado: {nome}",
-        use_column_width=True
-    )
-
+            st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
+            st.image(
+                img_np,
+                caption=f"Rosto cadastrado: {nome}",
+                use_column_width=True
+            )
 
 # =====================
 # RECONHECIMENTO
@@ -157,11 +158,27 @@ if arquivo2:
 
             confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
+            # desenhar rostos
+            for (x, y, w, h) in faces:
+                cv2.rectangle(
+                    img_np,
+                    (x, y),
+                    (x + w, y + h),
+                    (0, 255, 0),
+                    2
+                )
+
             # exibir resultado
             if melhor_nome == "Desconhecido":
                 st.error(f"❌ Desconhecido | confiança: {confianca:.1f}%")
             else:
                 st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+
+            st.image(
+                img_np,
+                caption="Resultado do reconhecimento",
+                use_column_width=True
+            )
 
             # salvar histórico
             history.append({
