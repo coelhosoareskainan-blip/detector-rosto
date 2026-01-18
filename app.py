@@ -240,3 +240,20 @@ if IS_CLOUD:
 else:
     st.info("✅ Rode localmente para usar webcam:")
     st.code("streamlit run app.py")
+    st.divider()
+st.header("🧪 Teste da IA")
+
+teste_img = st.file_uploader(
+    "Envie uma imagem para TESTE DA IA",
+    type=["jpg", "jpeg", "png"],
+    key="teste_ia"
+)
+
+if teste_img:
+    vec = get_embedding(teste_img)
+
+    if vec is None:
+        st.error("❌ IA NÃO RETORNOU VETOR")
+    else:
+        st.success(f"✅ IA OK | vetor com {len(vec)} números")
+
