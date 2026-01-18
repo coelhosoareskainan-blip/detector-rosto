@@ -15,6 +15,9 @@ DB_FILE = "face_db.npz"
 LIMIAR = 0.6
 
 IS_CLOUD = os.getenv("STREAMLIT_CLOUD") is not None
+# controle de exclusão segura (EVITA ERRO DO X)
+if "delete_name" not in st.session_state:
+    st.session_state.delete_name = None
 
 # =====================
 # BANCO DE DADOS
