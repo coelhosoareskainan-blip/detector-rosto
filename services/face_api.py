@@ -8,6 +8,7 @@ API_SECRET = os.getenv("FACEPP_API_SECRET")
 API_URL = "https://api-us.faceplusplus.com/facepp/v3/detect"
 
 def get_embedding(uploaded_file):
+    # valida credenciais
     if API_KEY is None or API_SECRET is None:
         return None
 
@@ -18,7 +19,7 @@ def get_embedding(uploaded_file):
     data = {
         "api_key": API_KEY,
         "api_secret": API_SECRET,
-        "return_attributes": "none"
+        "return_landmark": 1
     }
 
     response = requests.post(API_URL, files=files, data=data)
@@ -31,8 +32,8 @@ def get_embedding(uploaded_file):
     if "faces" not in result or len(result["faces"]) == 0:
         return None
 
-    # Face++ não retorna embedding direto,
-    # então usamos landmarks como vetor simplificado
+    # Face++ não retorna embedding real
+    # usamos landmarks (x,y) como vetor
     landmarks = result["faces"][0]["landmark"]
 
     embedding = []
@@ -42,10 +43,13 @@ def get_embedding(uploaded_file):
 
     vec = np.array(embedding, dtype=np.float32)
 
-# normalização (ESSENCIAL)
-norm = np.linalg.norm(vec)
-if norm == 0:
-    return None
+    # =====================
+    # NORMALIZAÇÃO (CRÍTICA)
+    # =====================
+    norm = np.linalg.norm(vec)
+    if norm == 0:
+        return None
 
-vec = vec / norm
-return vec.tolist()
+    vec = vec / norm
+
+    return vec.tolist()
