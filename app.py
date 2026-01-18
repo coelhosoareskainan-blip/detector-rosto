@@ -98,10 +98,16 @@ if arquivo and nome:
             save_json(DB_FILE, db)
 
             for (x, y, w, h) in faces:
-                cv2.rectangle(img_np, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.rectangle(
+                    img_np, (x, y), (x + w, y + h), (0, 255, 0), 2
+                )
 
             st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
-            st.image(img_np, caption=f"Rosto cadastrado: {nome}", use_column_width=True)
+            st.image(
+                img_np,
+                caption=f"Rosto cadastrado: {nome}",
+                use_column_width=True
+            )
 
 # =====================
 # RECONHECIMENTO
@@ -132,46 +138,50 @@ if arquivo2:
         if emb is None:
             st.error("❌ IA não conseguiu extrair o rosto.")
         else:
-# =====================
-# MATCH PROFISSIONAL
-# =====================
+            # =====================
+            # MATCH PROFISSIONAL
+            # =====================
 
-resultados = []
+            resultados = []
 
-for nome_db, emb_db in db.items():
-    d = distancia(emb, emb_db)
-    resultados.append((nome_db, d))
+            for nome_db, emb_db in db.items():
+                d = distancia(emb, emb_db)
+                resultados.append((nome_db, d))
 
-# ordenar por distância
-resultados.sort(key=lambda x: x[1])
+            resultados.sort(key=lambda x: x[1])
 
-melhor_nome, melhor_dist = resultados[0]
+            melhor_nome, melhor_dist = resultados[0]
+            segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
 
-# segurança extra: segundo mais próximo
-segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
+            DESCONHECIDO = False
 
-# ========= DECISÃO FINAL =========
-DESCONHECIDO = False
+            # regra 1: distância absoluta
+            if melhor_dist > LIMIAR:
+                DESCONHECIDO = True
 
-# regra 1: distância absoluta
-if melhor_dist > LIMIAR:
-    DESCONHECIDO = True
+            # regra 2: muito parecido com outro (ambiguidade)
+            if abs(segundo_dist - melhor_dist) < 0.05:
+                DESCONHECIDO = True
 
-# regra 2: distância muito próxima do segundo
-if abs(segundo_dist - melhor_dist) < 0.05:
-    DESCONHECIDO = True
+            # desenhar rostos
+            for (x, y, w, h) in faces:
+                cv2.rectangle(
+                    img_np, (x, y), (x + w, y + h), (0, 255, 0), 2
+                )
 
-# ========= RESULTADO =========
-if DESCONHECIDO:
-    st.error("❌ Desconhecido")
-    melhor_nome = "Desconhecido"
-    confianca = 0.0
-else:
-    confianca = (1 - melhor_dist / LIMIAR) * 100
-    st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+            if DESCONHECIDO:
+                melhor_nome = "Desconhecido"
+                confianca = 0.0
+                st.error("❌ Desconhecido")
+            else:
+                confianca = (1 - melhor_dist / LIMIAR) * 100
+                st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
 
-
-            st.image(img_np, caption="Resultado do reconhecimento", use_column_width=True)
+            st.image(
+                img_np,
+                caption="Resultado do reconhecimento",
+                use_column_width=True
+            )
 
             history.append({
                 "nome": melhor_nome,
@@ -214,7 +224,9 @@ if not history:
     st.info("Nenhum reconhecimento ainda.")
 else:
     for item in reversed(history[-10:]):
-        st.write(f"👤 {item['nome']} | {item['confianca']}% | {item['data']}")
+        st.write(
+            f"👤 {item['nome']} | {item['confianca']}% | {item['data']}"
+        )
 
 # =====================
 # TESTE DA IA
