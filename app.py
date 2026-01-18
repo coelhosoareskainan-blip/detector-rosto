@@ -7,19 +7,6 @@ import cv2
 import json
 from datetime import datetime
 
-HISTORY_FILE = "history.json"
-
-def load_history():
-    if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r") as f:
-            return json.load(f)
-    return []
-
-def save_history(data):
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(data, f, indent=2)
-
-
 # =====================
 # CONFIG
 # =====================
@@ -28,8 +15,29 @@ st.set_page_config(page_title="Reconhecimento Facial IA", layout="centered")
 st.title("🧠 Reconhecimento Facial (IA Real)")
 
 IS_CLOUD = os.getenv("STREAMLIT_CLOUD") is not None
+
 DB_FILE = "data/faces.json"
+HISTORY_FILE = "history.json"
 LIMIAR = 0.35
+
+os.makedirs("data", exist_ok=True)
+
+# =====================
+# UTILIDADES
+# =====================
+
+def load_json(path, default):
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return json.load(f)
+    return default
+
+def save_json(path, data):
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+
+db = load_json(DB_FILE, {})
+history = load_json(HISTORY_FILE, [])
 
 # =====================
 # LOAD CASCADE
@@ -44,23 +52,7 @@ if face_cascade.empty():
     st.stop()
 
 # =====================
-# BANCO DE DADOS
-# =====================
-
-def load_db():
-    if not os.path.exists(DB_FILE):
-        return {}
-    with open(DB_FILE, "r") as f:
-        return json.load(f)
-
-def save_db(db):
-    with open(DB_FILE, "w") as f:
-        json.dump(db, f)
-
-db = load_db()
-
-# =====================
-# DETECÇÃO DE ROSTO
+# FUNÇÕES
 # =====================
 
 def detectar_rostos(img_rgb):
@@ -73,14 +65,8 @@ def detectar_rostos(img_rgb):
     )
     return faces
 
-# =====================
-# DISTÂNCIA
-# =====================
-
 def distancia(a, b):
-    a = np.array(a)
-    b = np.array(b)
-    return np.linalg.norm(a - b)
+    return np.linalg.norm(np.array(a) - np.array(b))
 
 # =====================
 # CADASTRO
@@ -110,7 +96,7 @@ if arquivo and nome:
             st.error("❌ IA não conseguiu extrair o rosto.")
         else:
             db[nome] = embedding
-            save_db(db)
+            save_json(DB_FILE, db)
             st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
 
 # =====================
@@ -156,10 +142,21 @@ if arquivo2:
 
             confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
-if melhor_nome == "Desconhecido":
-    st.error(f"❌ Desconhecido | confiança: {confianca:.1f}%")
-else:
-    st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+            # exibir resultado
+            if melhor_nome == "Desconhecido":
+                st.error(f"❌ Desconhecido | confiança: {confianca:.1f}%")
+            else:
+                st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+
+            # salvar histórico
+            history.append({
+                "nome": melhor_nome,
+                "confianca": round(confianca, 1),
+                "distancia": round(melhor_dist, 3),
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            })
+
+            save_json(HISTORY_FILE, history)
 
 # =====================
 # DASHBOARD
@@ -179,8 +176,25 @@ else:
 
         if col2.button("❌", key=f"del_{nome}"):
             del db[nome]
-            save_db(db)
+            save_json(DB_FILE, db)
             st.rerun()
+
+# =====================
+# HISTÓRICO
+# =====================
+
+st.divider()
+st.header("🕒 Histórico de Reconhecimentos")
+
+if not history:
+    st.info("Nenhum reconhecimento ainda.")
+else:
+    for item in reversed(history[-10:]):
+        st.write(
+            f"👤 {item['nome']} | "
+            f"{item['confianca']}% | "
+            f"{item['data']}"
+        )
 
 # =====================
 # WEBCAM
