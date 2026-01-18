@@ -15,7 +15,8 @@ DB_FILE = "face_db.npz"
 LIMIAR = 0.6
 
 IS_CLOUD = os.getenv("STREAMLIT_CLOUD") is not None
-# controle de exclusão segura (EVITA ERRO DO X)
+
+# controle de exclusão segura
 if "delete_name" not in st.session_state:
     st.session_state.delete_name = None
 
@@ -31,6 +32,11 @@ def load_db():
 
 def save_db(db):
     np.savez(DB_FILE, **db)
+
+def deletar_rosto(nome):
+    if nome in db:
+        del db[nome]
+        save_db(db)
 
 db = load_db()
 
@@ -122,18 +128,18 @@ if not db:
 else:
     st.write(f"Total de rostos cadastrados: {len(db)}")
 
-    for nome in nomes:
-    col1, col2 = st.columns([4, 1])
-    col1.write(nome)
-    
-    if st.session_state.delete_name:
+    for nome in list(db.keys()):
+        col1, col2 = st.columns([4, 1])
+        col1.write(nome)
+
+        if col2.button("❌", key=f"del_{nome}"):
+            st.session_state.delete_name = nome
+
+# exclusão segura (FORA do loop)
+if st.session_state.delete_name:
     deletar_rosto(st.session_state.delete_name)
     st.session_state.delete_name = None
     st.rerun()
-
-    if col2.button("❌", key=f"del_{nome}"):
-        st.session_state.delete_name = nome
-
 
 # =====================
 # WEBCAM
