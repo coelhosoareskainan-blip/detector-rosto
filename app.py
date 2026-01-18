@@ -17,7 +17,7 @@ st.title("🧠 Reconhecimento Facial (IA Real)")
 DB_FILE = "data/faces.json"
 HISTORY_FILE = "history.json"
 
-LIMIAR = 0.25          # LIMIAR DURO
+LIMIAR = 0.25          # MAIS RIGOROSO
 CONF_MINIMA = 80.0     # CONFIANÇA MÍNIMA OBRIGATÓRIA
 
 os.makedirs("data", exist_ok=True)
@@ -47,6 +47,10 @@ face_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 )
 
+if face_cascade.empty():
+    st.error("❌ Erro ao carregar Haar Cascade")
+    st.stop()
+
 # =====================
 # FUNÇÕES
 # =====================
@@ -54,7 +58,7 @@ face_cascade = cv2.CascadeClassifier(
 def detectar_rostos(img_rgb):
     gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
     return face_cascade.detectMultiScale(
-        gray, 1.1, 5, minSize=(80, 80)
+        gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
     )
 
 def distancia(a, b):
@@ -64,85 +68,138 @@ def distancia(a, b):
 # CADASTRO
 # =====================
 
-st.header("🅱️ Cadastro")
+st.header("🅱️ Cadastro de rosto")
 
-nome = st.text_input("Nome")
-arquivo = st.file_uploader("Imagem", ["jpg", "png"], key="cad")
+nome = st.text_input("Nome da pessoa")
+arquivo = st.file_uploader(
+    "Envie uma imagem para cadastro",
+    ["jpg", "jpeg", "png"],
+    key="cadastro"
+)
 
 if arquivo and nome:
     img = Image.open(arquivo).convert("RGB")
     img_np = np.array(img)
 
     faces = detectar_rostos(img_np)
+
     if len(faces) == 0:
-        st.error("❌ Nenhum rosto")
+        st.error("❌ Nenhum rosto detectado.")
     else:
         emb = get_embedding(arquivo)
-        if emb:
+
+        if emb is None:
+            st.error("❌ IA não conseguiu extrair o rosto.")
+        else:
             db[nome] = emb
             save_json(DB_FILE, db)
-            st.success(f"✅ {nome} cadastrado")
-            st.image(img_np)
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(img_np, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+            st.success(f"✅ Rosto de '{nome}' cadastrado com sucesso!")
+            st.image(img_np, use_column_width=True)
 
 # =====================
 # RECONHECIMENTO
 # =====================
 
 st.divider()
-st.header("🅰️ Reconhecimento")
+st.header("🅰️ Reconhecimento facial")
 
-arquivo2 = st.file_uploader("Imagem", ["jpg", "png"], key="rec")
+arquivo2 = st.file_uploader(
+    "Envie uma imagem para reconhecimento",
+    ["jpg", "jpeg", "png"],
+    key="reconhecimento"
+)
 
 if arquivo2 and db:
-    emb = get_embedding(arquivo2)
+    img = Image.open(arquivo2).convert("RGB")
+    img_np = np.array(img)
 
-    if emb is None:
-        st.error("❌ IA falhou")
+    faces = detectar_rostos(img_np)
+
+    if len(faces) == 0:
+        st.error("❌ Nenhum rosto detectado.")
     else:
-        resultados = []
+        emb = get_embedding(arquivo2)
 
-        for nome_db, emb_db in db.items():
-            d = distancia(emb, emb_db)
-            resultados.append((nome_db, d))
-
-        resultados.sort(key=lambda x: x[1])
-
-        melhor_nome, melhor_dist = resultados[0]
-
-        confianca = (1 - melhor_dist / LIMIAR) * 100
-
-        # =====================
-        # DECISÃO FINAL
-        # =====================
-
-        if melhor_dist > LIMIAR or confianca < CONF_MINIMA:
-            melhor_nome = "Desconhecido"
-            confianca = 0.0
-            st.error("❌ Desconhecido")
+        if emb is None:
+            st.error("❌ IA não conseguiu extrair o rosto.")
         else:
-            st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+            resultados = []
 
-        history.append({
-            "nome": melhor_nome,
-            "confianca": round(confianca, 1),
-            "dist": round(melhor_dist, 3),
-            "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        })
+            for nome_db, emb_db in db.items():
+                d = distancia(emb, emb_db)
+                resultados.append((nome_db, d))
 
-        save_json(HISTORY_FILE, history)
+            resultados.sort(key=lambda x: x[1])
+
+            melhor_nome, melhor_dist = resultados[0]
+            segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
+
+            confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
+
+            # =====================
+            # DECISÃO FINAL (FORTE)
+            # =====================
+
+            DESCONHECIDO = (
+                melhor_dist > LIMIAR or
+                confianca < CONF_MINIMA or
+                abs(segundo_dist - melhor_dist) < 0.05
+            )
+
+            for (x, y, w, h) in faces:
+                cv2.rectangle(img_np, (x, y), (x+w, y+h), (0, 255, 0), 2)
+
+            if DESCONHECIDO:
+                melhor_nome = "Desconhecido"
+                confianca = 0.0
+                st.error("❌ Desconhecido")
+            else:
+                st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+
+            st.image(img_np, use_column_width=True)
+
+            history.append({
+                "nome": melhor_nome,
+                "confianca": round(confianca, 1),
+                "distancia": round(melhor_dist, 3),
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            })
+
+            save_json(HISTORY_FILE, history)
+
+# =====================
+# HISTÓRICO
+# =====================
+
+st.divider()
+st.header("🕒 Histórico")
+
+if not history:
+    st.info("Nenhum reconhecimento ainda.")
+else:
+    for item in reversed(history[-10:]):
+        st.write(f"👤 {item['nome']} | {item['confianca']}% | {item['data']}")
 
 # =====================
 # TESTE IA
 # =====================
 
 st.divider()
-st.header("🧪 Teste IA")
+st.header("🧪 Teste da IA")
 
-teste = st.file_uploader("Teste", ["jpg", "png"], key="test")
+teste_img = st.file_uploader(
+    "Envie uma imagem para teste",
+    ["jpg", "jpeg", "png"],
+    key="teste_ia"
+)
 
-if teste:
-    vec = get_embedding(teste)
+if teste_img:
+    vec = get_embedding(teste_img)
     if vec:
-        st.success(f"✅ Vetor OK ({len(vec)} números)")
+        st.success(f"✅ IA OK | vetor com {len(vec)} números")
     else:
-        st.error("❌ Vetor inválido")
+        st.error("❌ IA NÃO RETORNOU VETOR")
