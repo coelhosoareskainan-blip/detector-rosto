@@ -15,7 +15,7 @@ st.title("🧠 Reconhecimento Facial (IA Real)")
 
 IS_CLOUD = os.getenv("STREAMLIT_CLOUD") is not None
 DB_FILE = "data/faces.json"
-LIMIAR = 0.6
+LIMIAR = 0.35
 
 # =====================
 # LOAD CASCADE
