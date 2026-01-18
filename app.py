@@ -153,26 +153,15 @@ if arquivo2:
                     melhor_dist = d
                     melhor_nome = nome_db
 
-            if melhor_dist > LIMIAR:
-                melhor_nome = "Desconhecido"
+            # DECISÃO FINAL (ANTES DE CONFIANÇA)
+if melhor_dist > LIMIAR:
+    st.error("❌ Desconhecido")
+    melhor_nome = "Desconhecido"
+    confianca = 0.0
+else:
+    confianca = (1 - melhor_dist / LIMIAR) * 100
+    st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
 
-            confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
-
-            # desenhar rostos
-            for (x, y, w, h) in faces:
-                cv2.rectangle(
-                    img_np,
-                    (x, y),
-                    (x + w, y + h),
-                    (0, 255, 0),
-                    2
-                )
-
-            # exibir resultado
-            if melhor_nome == "Desconhecido":
-                st.error(f"❌ Desconhecido | confiança: {confianca:.1f}%")
-            else:
-                st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
 
             st.image(
                 img_np,
