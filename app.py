@@ -125,6 +125,11 @@ else:
     for nome in nomes:
     col1, col2 = st.columns([4, 1])
     col1.write(nome)
+    
+    if st.session_state.delete_name:
+    deletar_rosto(st.session_state.delete_name)
+    st.session_state.delete_name = None
+    st.rerun()
 
     if col2.button("❌", key=f"del_{nome}"):
         st.session_state.delete_name = nome
