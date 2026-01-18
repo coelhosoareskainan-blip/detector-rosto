@@ -140,7 +140,12 @@ if arquivo2:
             if melhor_dist > LIMIAR:
                 melhor_nome = "Desconhecido"
 
-            st.success(f"👤 {melhor_nome} | distância: {melhor_dist:.3f}")
+            confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
+
+if melhor_nome == "Desconhecido":
+    st.error(f"❌ Desconhecido | confiança: {confianca:.1f}%")
+else:
+    st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
 
 # =====================
 # DASHBOARD
