@@ -1,5 +1,5 @@
 streamlit
 numpy
 pillow
-face_recognition
-dlib
+mediapipe
+opencv-python-headless
