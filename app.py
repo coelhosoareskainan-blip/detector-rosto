@@ -1,9 +1,8 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 import json
 import os
-import cv2
 from deepface import DeepFace
 
 # =====================
@@ -18,7 +17,7 @@ os.makedirs("data", exist_ok=True)
 
 MODEL_NAME = "ArcFace"
 DETECTOR = "retinaface"
-DIST_THRESHOLD = 0.35  # 🔥 nível policial / iPhone
+DIST_THRESHOLD = 0.35  # nível policial
 
 # =====================
 # BANCO
@@ -57,8 +56,7 @@ if arquivo and nome:
             align=True
         )
 
-        if nome not in db:
-            db[nome] = []
+        db.setdefault(nome, [])
 
         for r in reps:
             db[nome].append(r["embedding"])
@@ -84,7 +82,9 @@ arquivo2 = st.file_uploader(
 )
 
 if arquivo2 and db:
-    img = np.array(Image.open(arquivo2).convert("RGB"))
+    img_pil = Image.open(arquivo2).convert("RGB")
+    img = np.array(img_pil)
+    draw = ImageDraw.Draw(img_pil)
 
     try:
         detections = DeepFace.extract_faces(
@@ -120,25 +120,17 @@ if arquivo2 and db:
 
             if melhor_dist <= DIST_THRESHOLD:
                 label = melhor_nome
-                cor = (0, 255, 0)
+                cor = "green"
             else:
                 label = "DESCONHECIDO"
-                cor = (255, 0, 0)
+                cor = "red"
 
             x, y, w, h = region["x"], region["y"], region["w"], region["h"]
 
-            cv2.rectangle(img, (x, y), (x+w, y+h), cor, 2)
-            cv2.putText(
-                img,
-                label,
-                (x, y-10 if y > 20 else y+h+25),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                cor,
-                2
-            )
+            draw.rectangle([x, y, x + w, y + h], outline=cor, width=3)
+            draw.text((x, y - 20 if y > 20 else y + h + 5), label, fill=cor)
 
-        st.image(img, use_column_width=True)
+        st.image(img_pil, use_column_width=True)
 
     except Exception as e:
         st.error("❌ Erro no reconhecimento")
