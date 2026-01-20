@@ -3,6 +3,8 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import cv2
+import json
+import os
 from io import BytesIO
 
 # =====================
@@ -10,34 +12,35 @@ from io import BytesIO
 # =====================
 
 st.set_page_config(page_title="Reconhecimento Facial IA", layout="centered")
-st.title("🧠 Reconhecimento Facial")
+st.title("🧠 Reconhecimento Facial IA")
 
 DB_FILE = "data/faces.json"
+os.makedirs("data", exist_ok=True)
 
-LIMIAR = 0.55          # 🔥 ajustado para Face++
-CONF_MINIMA = 45.0     # 🔥 ajustado para Face++
+LIMIAR = 0.55
+CONF_MINIMA = 45.0
 
 # =====================
 # UTILIDADES
 # =====================
 
 def load_db():
-    try:
-        import json
+    if os.path.exists(DB_FILE):
         with open(DB_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
-        return {}
+    return {}
 
 def save_db(db):
-    import json
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2, ensure_ascii=False)
+
+def distancia(a, b):
+    return np.linalg.norm(np.array(a) - np.array(b))
 
 db = load_db()
 
 # =====================
-# DETECTOR
+# DETECTOR DE ROSTOS
 # =====================
 
 face_cascade = cv2.CascadeClassifier(
@@ -61,97 +64,92 @@ def crop_face(img, box):
     buf.seek(0)
     return buf
 
-def distancia(a, b):
-    return np.linalg.norm(np.array(a) - np.array(b))
-
 # =====================
 # CADASTRO
 # =====================
 
-st.header("🅱️ Cadastro")
+st.header("🅱️ Cadastro de rosto")
 
-nome = st.text_input("Nome")
-arquivo = st.file_uploader("Imagem para cadastro", ["jpg","png","jpeg"])
+nome = st.text_input("Nome da pessoa")
+arquivo = st.file_uploader("Imagem para cadastro", ["jpg", "jpeg", "png"])
 
 if arquivo and nome:
     img = np.array(Image.open(arquivo).convert("RGB"))
     faces = detectar_rostos(img)
 
     if len(faces) == 0:
-        st.error("Nenhum rosto detectado")
+        st.error("❌ Nenhum rosto detectado")
     else:
         face_file = crop_face(img, faces[0])
         vecs = get_embeddings(face_file)
 
         if not vecs:
-            st.error("IA não retornou embedding")
+            st.error("❌ IA não conseguiu extrair embedding")
         else:
             db[nome] = vecs[0]
             save_db(db)
-            st.success(f"{nome} cadastrado com sucesso")
+            st.success(f"✅ {nome} cadastrado com sucesso")
 
 # =====================
 # RECONHECIMENTO
 # =====================
 
 st.divider()
-st.header("🅰️ Reconhecimento")
+st.header("🅰️ Reconhecimento Facial")
 
-arquivo2 = st.file_uploader("Imagem para reconhecimento", ["jpg","png","jpeg"], key="rec")
+arquivo2 = st.file_uploader(
+    "Imagem para reconhecimento",
+    ["jpg", "jpeg", "png"],
+    key="rec"
+)
 
 if arquivo2 and db:
     img = np.array(Image.open(arquivo2).convert("RGB"))
     faces = detectar_rostos(img)
-    
-for (x, y, w, h) in faces:
 
-    face_file = crop_face(img_np, (x, y, w, h))
-    embeddings = get_embeddings(face_file)
-
-    if not embeddings:
-        label = "DESCONHECIDO"
-        cor = (255, 0, 0)
+    if len(faces) == 0:
+        st.error("❌ Nenhum rosto detectado")
     else:
-        emb = embeddings[0]
+        for (x, y, w, h) in faces:
 
-        melhor_nome = "Desconhecido"
-        melhor_dist = float("inf")
+            face_file = crop_face(img, (x, y, w, h))
+            embeddings = get_embeddings(face_file)
 
-        for nome_db, emb_db in db.items():
-            d = distancia(emb, emb_db)
-            if d < melhor_dist:
-                melhor_dist = d
-                melhor_nome = nome_db
-
-        confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
-
-        if melhor_dist <= LIMIAR and confianca >= CONF_MINIMA:
-            label = f"{melhor_nome} ({confianca:.1f}%)"
-            cor = (0, 255, 0)
-            nome_final = melhor_nome
-        else:
             label = "DESCONHECIDO"
             cor = (255, 0, 0)
-            nome_final = "Desconhecido"
-            confianca = 0.0
 
-    # 🔒 posição segura do texto
-    texto_y = y - 10 if y - 10 > 20 else y + h + 25
+            if embeddings:
+                emb = embeddings[0]
 
-    cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
-    cv2.putText(
-        img_np,
-        label,
-        (x, texto_y),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.9,
-        cor,
-        2
-    )
+                melhor_nome = "Desconhecido"
+                melhor_dist = float("inf")
 
-    history.append({
-        "nome": nome_final,
-        "confianca": round(confianca, 1),
-        "distancia": round(melhor_dist if melhor_dist != float("inf") else 0, 3),
-        "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    })
+                for nome_db, emb_db in db.items():
+                    d = distancia(emb, emb_db)
+                    if d < melhor_dist:
+                        melhor_dist = d
+                        melhor_nome = nome_db
+
+                confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
+
+                if melhor_dist <= LIMIAR and confianca >= CONF_MINIMA:
+                    label = f"{melhor_nome} ({confianca:.1f}%)"
+                    cor = (0, 255, 0)
+
+            texto_y = y - 10 if y - 10 > 20 else y + h + 25
+
+            cv2.rectangle(img, (x, y), (x+w, y+h), cor, 2)
+            cv2.putText(
+                img,
+                label,
+                (x, texto_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                cor,
+                2
+            )
+
+        st.image(img, use_column_width=True)
+
+elif arquivo2 and not db:
+    st.warning("⚠️ Nenhuma pessoa cadastrada ainda")
