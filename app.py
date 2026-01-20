@@ -1,27 +1,27 @@
-from services.face_api import get_embeddings
+from deepface import DeepFace
 import streamlit as st
 import numpy as np
 from PIL import Image
-import cv2
 import json
 import os
-from io import BytesIO
+import cv2
 
 # =====================
 # CONFIG
 # =====================
 
-st.set_page_config(page_title="Reconhecimento Facial IA", layout="centered")
-st.title("🧠 Reconhecimento Facial IA")
+st.set_page_config(page_title="Reconhecimento Facial Profissional", layout="centered")
+st.title("🧠 Reconhecimento Facial • Nível Profissional")
 
 DB_FILE = "data/faces.json"
 os.makedirs("data", exist_ok=True)
 
-LIMIAR = 0.55
-CONF_MINIMA = 45.0
+MODEL_NAME = "ArcFace"
+DETECTOR = "retinaface"
+DIST_THRESHOLD = 0.35  # 🔥 nível policial
 
 # =====================
-# UTILIDADES
+# DB
 # =====================
 
 def load_db():
@@ -34,61 +34,40 @@ def save_db(db):
     with open(DB_FILE, "w", encoding="utf-8") as f:
         json.dump(db, f, indent=2, ensure_ascii=False)
 
-def distancia(a, b):
-    return np.linalg.norm(np.array(a) - np.array(b))
-
 db = load_db()
-
-# =====================
-# DETECTOR DE ROSTOS
-# =====================
-
-face_cascade = cv2.CascadeClassifier(
-    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-)
-
-def detectar_rostos(img):
-    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    return face_cascade.detectMultiScale(
-        gray,
-        scaleFactor=1.2,
-        minNeighbors=6,
-        minSize=(90, 90)
-    )
-
-def crop_face(img, box):
-    x, y, w, h = box
-    face = img[y:y+h, x:x+w]
-    buf = BytesIO()
-    Image.fromarray(face).save(buf, format="JPEG")
-    buf.seek(0)
-    return buf
 
 # =====================
 # CADASTRO
 # =====================
 
-st.header("🅱️ Cadastro de rosto")
+st.header("🅱️ Cadastro de Pessoa")
 
 nome = st.text_input("Nome da pessoa")
 arquivo = st.file_uploader("Imagem para cadastro", ["jpg", "jpeg", "png"])
 
 if arquivo and nome:
     img = np.array(Image.open(arquivo).convert("RGB"))
-    faces = detectar_rostos(img)
 
-    if len(faces) == 0:
-        st.error("❌ Nenhum rosto detectado")
-    else:
-        face_file = crop_face(img, faces[0])
-        vecs = get_embeddings(face_file)
+    try:
+        reps = DeepFace.represent(
+            img_path=img,
+            model_name=MODEL_NAME,
+            detector_backend=DETECTOR,
+            enforce_detection=True
+        )
 
-        if not vecs:
-            st.error("❌ IA não conseguiu extrair embedding")
-        else:
-            db[nome] = vecs[0]
-            save_db(db)
-            st.success(f"✅ {nome} cadastrado com sucesso")
+        if nome not in db:
+            db[nome] = []
+
+        for r in reps:
+            db[nome].append(r["embedding"])
+
+        save_db(db)
+        st.success(f"✅ {nome} cadastrado ({len(reps)} rosto(s))")
+
+    except Exception as e:
+        st.error("❌ Erro no cadastro")
+        st.code(str(e))
 
 # =====================
 # RECONHECIMENTO
@@ -105,44 +84,52 @@ arquivo2 = st.file_uploader(
 
 if arquivo2 and db:
     img = np.array(Image.open(arquivo2).convert("RGB"))
-    faces = detectar_rostos(img)
 
-    if len(faces) == 0:
-        st.error("❌ Nenhum rosto detectado")
-    else:
-        for (x, y, w, h) in faces:
+    try:
+        detections = DeepFace.extract_faces(
+            img_path=img,
+            detector_backend=DETECTOR,
+            enforce_detection=False,
+            align=True
+        )
 
-            face_file = crop_face(img, (x, y, w, h))
-            embeddings = get_embeddings(face_file)
+        for det in detections:
+            face_img = det["face"]
+            region = det["facial_area"]
 
-            label = "DESCONHECIDO"
-            cor = (255, 0, 0)
+            rep = DeepFace.represent(
+                img_path=face_img,
+                model_name=MODEL_NAME,
+                detector_backend="skip"
+            )[0]["embedding"]
 
-            if embeddings:
-                emb = embeddings[0]
+            melhor_nome = "DESCONHECIDO"
+            melhor_dist = 1.0
 
-                melhor_nome = "Desconhecido"
-                melhor_dist = float("inf")
+            for nome_db, embs in db.items():
+                for emb_db in embs:
+                    d = np.dot(rep, emb_db) / (
+                        np.linalg.norm(rep) * np.linalg.norm(emb_db)
+                    )
+                    dist = 1 - d  # cosine distance
 
-                for nome_db, emb_db in db.items():
-                    d = distancia(emb, emb_db)
-                    if d < melhor_dist:
-                        melhor_dist = d
+                    if dist < melhor_dist:
+                        melhor_dist = dist
                         melhor_nome = nome_db
 
-                confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
+            if melhor_dist <= DIST_THRESHOLD:
+                label = f"{melhor_nome}"
+                cor = (0, 255, 0)
+            else:
+                label = "DESCONHECIDO"
+                cor = (255, 0, 0)
 
-                if melhor_dist <= LIMIAR and confianca >= CONF_MINIMA:
-                    label = f"{melhor_nome} ({confianca:.1f}%)"
-                    cor = (0, 255, 0)
-
-            texto_y = y - 10 if y - 10 > 20 else y + h + 25
-
+            x, y, w, h = region["x"], region["y"], region["w"], region["h"]
             cv2.rectangle(img, (x, y), (x+w, y+h), cor, 2)
             cv2.putText(
                 img,
                 label,
-                (x, texto_y),
+                (x, y-10 if y > 20 else y+h+25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.9,
                 cor,
@@ -151,5 +138,6 @@ if arquivo2 and db:
 
         st.image(img, use_column_width=True)
 
-elif arquivo2 and not db:
-    st.warning("⚠️ Nenhuma pessoa cadastrada ainda")
+    except Exception as e:
+        st.error("❌ Erro no reconhecimento")
+        st.code(str(e))
