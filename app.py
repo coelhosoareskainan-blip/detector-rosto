@@ -17,7 +17,7 @@ os.makedirs("data", exist_ok=True)
 
 MODEL_NAME = "ArcFace"
 DETECTOR = "retinaface"
-DIST_THRESHOLD = 0.35  # nível policial
+DIST_THRESHOLD = 0.35
 
 # =====================
 # BANCO
@@ -62,10 +62,10 @@ if arquivo and nome:
             db[nome].append(r["embedding"])
 
         save_db(db)
-        st.success(f"✅ {nome} cadastrado com sucesso ({len(reps)} rosto)")
+        st.success(f"✅ {nome} cadastrado com sucesso")
 
     except Exception as e:
-        st.error("❌ Erro ao cadastrar rosto")
+        st.error("Erro ao cadastrar")
         st.code(str(e))
 
 # =====================
@@ -133,8 +133,8 @@ if arquivo2 and db:
         st.image(img_pil, use_column_width=True)
 
     except Exception as e:
-        st.error("❌ Erro no reconhecimento")
+        st.error("Erro no reconhecimento")
         st.code(str(e))
 
 elif arquivo2 and not db:
-    st.warning("⚠️ Nenhuma pessoa cadastrada ainda")
+    st.warning("Nenhuma pessoa cadastrada")
