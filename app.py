@@ -18,8 +18,8 @@ st.title("🧠 Reconhecimento Facial (IA Real)")
 DB_FILE = "data/faces.json"
 HISTORY_FILE = "history.json"
 
-LIMIAR = 0.25          # MAIS RIGOROSO
-CONF_MINIMA = 80.0     # CONFIANÇA MÍNIMA OBRIGATÓRIA
+LIMIAR = 0.25          # rigoroso
+CONF_MINIMA = 80.0     # confiança mínima
 
 os.makedirs("data", exist_ok=True)
 
@@ -65,6 +65,17 @@ def detectar_rostos(img_rgb):
 def distancia(a, b):
     return np.linalg.norm(np.array(a) - np.array(b))
 
+def crop_face(img_rgb, box):
+    x, y, w, h = box
+    face = img_rgb[y:y+h, x:x+w]
+
+    pil_img = Image.fromarray(face)
+    buf = BytesIO()
+    pil_img.save(buf, format="JPEG")
+    buf.seek(0)
+
+    return buf
+
 # =====================
 # CADASTRO
 # =====================
@@ -102,7 +113,7 @@ if arquivo and nome:
             st.image(img_np, use_column_width=True)
 
 # =====================
-# RECONHECIMENTO
+# RECONHECIMENTO (MULTI-FACE REAL)
 # =====================
 
 st.divider()
@@ -123,11 +134,15 @@ if arquivo2 and db:
     if len(faces) == 0:
         st.error("❌ Nenhum rosto detectado.")
     else:
-        emb = get_embedding(arquivo2)
+        for (x, y, w, h) in faces:
+            face_file = crop_face(img_np, (x, y, w, h))
+            emb = get_embedding(face_file)
 
-        if emb is None:
-            st.error("❌ IA não conseguiu extrair o rosto.")
-        else:
+            if emb is None:
+                label = "ERRO"
+                cor = (0, 0, 255)
+                continue
+
             resultados = []
 
             for nome_db, emb_db in db.items():
@@ -141,55 +156,44 @@ if arquivo2 and db:
 
             confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
-            # =====================
-            # DECISÃO FINAL (FORTE)
-            # =====================
-
             DESCONHECIDO = (
                 melhor_dist > LIMIAR or
                 confianca < CONF_MINIMA or
                 abs(segundo_dist - melhor_dist) < 0.05
             )
 
-            for (x, y, w, h) in faces:
-                if DESCONHECIDO:
-                    cor = (255, 0, 0)  # vermelho
-                    label = "DESCONHECIDO"
-                else:
-                    cor = (0, 255, 0)  # verde
-                    label = f"{melhor_nome} ({confianca:.1f}%)"
-                    
-                cv2.rectangle(img_np, (x, y), (x + w, y + h), cor, 2)
-                
-                cv2.putText(
-                    img_np,
-                    label,
-                    (x, y - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
-                    cor,
-                    2,
-                    cv2.LINE_AA
-                )
-
-
             if DESCONHECIDO:
-                melhor_nome = "Desconhecido"
+                nome_final = "Desconhecido"
                 confianca = 0.0
-                st.error("❌ Desconhecido")
+                label = "DESCONHECIDO"
+                cor = (255, 0, 0)
             else:
-                st.success(f"✅ {melhor_nome} | confiança: {confianca:.1f}%")
+                nome_final = melhor_nome
+                label = f"{melhor_nome} ({confianca:.1f}%)"
+                cor = (0, 255, 0)
 
-            st.image(img_np, use_column_width=True)
+            cv2.rectangle(img_np, (x, y), (x + w, y + h), cor, 2)
+
+            cv2.putText(
+                img_np,
+                label,
+                (x, y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                cor,
+                2,
+                cv2.LINE_AA
+            )
 
             history.append({
-                "nome": melhor_nome,
+                "nome": nome_final,
                 "confianca": round(confianca, 1),
                 "distancia": round(melhor_dist, 3),
                 "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             })
 
-            save_json(HISTORY_FILE, history)
+        save_json(HISTORY_FILE, history)
+        st.image(img_np, use_column_width=True)
 
 # =====================
 # HISTÓRICO
