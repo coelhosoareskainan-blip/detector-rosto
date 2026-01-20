@@ -102,18 +102,20 @@ arquivo2 = st.file_uploader("Imagem para reconhecimento", ["jpg","png","jpeg"], 
 if arquivo2 and db:
     img = np.array(Image.open(arquivo2).convert("RGB"))
     faces = detectar_rostos(img)
+    
+for (x, y, w, h) in faces:
 
-    for (x,y,w,h) in faces:
-        face_file = crop_face(img, (x,y,w,h))
-        vecs = get_embeddings(face_file)
+    face_file = crop_face(img_np, (x, y, w, h))
+    embeddings = get_embeddings(face_file)
 
-        if not vecs:
-            continue
-
-        emb = vecs[0]
+    if not embeddings:
+        label = "DESCONHECIDO"
+        cor = (255, 0, 0)
+    else:
+        emb = embeddings[0]
 
         melhor_nome = "Desconhecido"
-        melhor_dist = 999
+        melhor_dist = float("inf")
 
         for nome_db, emb_db in db.items():
             d = distancia(emb, emb_db)
@@ -123,15 +125,33 @@ if arquivo2 and db:
 
         confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
-        if melhor_dist > LIMIAR or confianca < CONF_MINIMA:
-            label = "DESCONHECIDO"
-            cor = (255,0,0)
-        else:
+        if melhor_dist <= LIMIAR and confianca >= CONF_MINIMA:
             label = f"{melhor_nome} ({confianca:.1f}%)"
-            cor = (0,255,0)
+            cor = (0, 255, 0)
+            nome_final = melhor_nome
+        else:
+            label = "DESCONHECIDO"
+            cor = (255, 0, 0)
+            nome_final = "Desconhecido"
+            confianca = 0.0
 
-        cv2.rectangle(img, (x,y), (x+w,y+h), cor, 2)
-        cv2.putText(img, label, (x, y-10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2)
+    # 🔒 posição segura do texto
+    texto_y = y - 10 if y - 10 > 20 else y + h + 25
 
-    st.image(img, use_column_width=True)
+    cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
+    cv2.putText(
+        img_np,
+        label,
+        (x, texto_y),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.9,
+        cor,
+        2
+    )
+
+    history.append({
+        "nome": nome_final,
+        "confianca": round(confianca, 1),
+        "distancia": round(melhor_dist if melhor_dist != float("inf") else 0, 3),
+        "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    })
