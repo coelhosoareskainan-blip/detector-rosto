@@ -41,7 +41,7 @@ db = load_json(DB_FILE, {})
 history = load_json(HISTORY_FILE, [])
 
 # =====================
-# CASCADE
+# CASCADE (MAIS RIGOROSO)
 # =====================
 
 face_cascade = cv2.CascadeClassifier(
@@ -59,7 +59,10 @@ if face_cascade.empty():
 def detectar_rostos(img_rgb):
     gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
     return face_cascade.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80)
+        gray,
+        scaleFactor=1.15,
+        minNeighbors=7,
+        minSize=(100, 100)
     )
 
 def distancia(a, b):
@@ -101,7 +104,6 @@ if arquivo and nome:
         if not embeddings:
             st.error("❌ IA não conseguiu extrair o rosto.")
         else:
-            # cadastro usa apenas o PRIMEIRO rosto
             db[nome] = embeddings[0]
             save_json(DB_FILE, db)
 
@@ -124,92 +126,72 @@ arquivo2 = st.file_uploader(
     key="reconhecimento"
 )
 
-if arquivo2:
-    if not db:
-        st.warning("⚠️ Nenhum rosto cadastrado.")
+if arquivo2 and db:
+    img = Image.open(arquivo2).convert("RGB")
+    img_np = np.array(img)
+
+    faces = detectar_rostos(img_np)
+
+    if len(faces) == 0:
+        st.error("❌ Nenhum rosto detectado.")
     else:
-        img = Image.open(arquivo2).convert("RGB")
-        img_np = np.array(img)
+        for (x, y, w, h) in faces:
 
-        faces = detectar_rostos(img_np)
+            # segurança extra
+            if w < 100 or h < 100:
+                continue
 
-        if len(faces) == 0:
-            st.error("❌ Nenhum rosto detectado.")
-        else:
-            for (x, y, w, h) in faces:
-                face_file = crop_face(img_np, (x, y, w, h))
-                embeddings = get_embeddings(face_file)
+            face_file = crop_face(img_np, (x, y, w, h))
+            embeddings = get_embeddings(face_file)
 
-                if not embeddings:
-                    label = "ERRO"
-                    cor = (0, 0, 255)
-                else:
-                    emb = embeddings[0]
-                    resultados = []
+            if not embeddings:
+                continue  # NÃO desenha lixo
 
-                    for nome_db, emb_db in db.items():
-                        d = distancia(emb, emb_db)
-                        resultados.append((nome_db, d))
+            emb = embeddings[0]
 
-                    resultados.sort(key=lambda x: x[1])
+            resultados = []
+            for nome_db, emb_db in db.items():
+                d = distancia(emb, emb_db)
+                resultados.append((nome_db, d))
 
-                    melhor_nome, melhor_dist = resultados[0]
-                    segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
+            resultados.sort(key=lambda x: x[1])
 
-                    confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
+            melhor_nome, melhor_dist = resultados[0]
+            segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
 
-                    DESCONHECIDO = (
-                        melhor_dist > LIMIAR or
-                        confianca < CONF_MINIMA or
-                        abs(segundo_dist - melhor_dist) < 0.05
-                    )
+            confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
-                    if DESCONHECIDO:
-                        label = "DESCONHECIDO"
-                        cor = (255, 0, 0)
-                        nome_final = "Desconhecido"
-                        confianca = 0.0
-                    else:
-                        label = f"{melhor_nome} ({confianca:.1f}%)"
-                        cor = (0, 255, 0)
-                        nome_final = melhor_nome
+            DESCONHECIDO = (
+                melhor_dist > LIMIAR or
+                confianca < CONF_MINIMA or
+                abs(segundo_dist - melhor_dist) < 0.05
+            )
 
-                    history.append({
-                        "nome": nome_final,
-                        "confianca": round(confianca, 1),
-                        "distancia": round(melhor_dist, 3),
-                        "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                    })
+            if DESCONHECIDO:
+                label = "DESCONHECIDO"
+                cor = (255, 0, 0)
+                nome_final = "Desconhecido"
+                confianca = 0.0
+            else:
+                label = f"{melhor_nome} ({confianca:.1f}%)"
+                cor = (0, 255, 0)
+                nome_final = melhor_nome
 
-                cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
-                cv2.putText(
-                    img_np, label, (x, y-10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2
-                )
+            cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
+            cv2.putText(
+                img_np, label, (x, y-10),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2
+            )
 
-            save_json(HISTORY_FILE, history)
-            st.image(img_np, use_column_width=True)
+            history.append({
+                "nome": nome_final,
+                "confianca": round(confianca, 1),
+                "distancia": round(melhor_dist, 3),
+                "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            })
 
-# =====================
-# DASHBOARD
-# =====================
-
-st.divider()
-st.header("📊 Dashboard")
-
-if not db:
-    st.info("Nenhum rosto cadastrado ainda.")
-else:
-    st.write(f"Total de rostos cadastrados: {len(db)}")
-
-    for nome in list(db.keys()):
-        col1, col2 = st.columns([4, 1])
-        col1.write(nome)
-
-        if col2.button("❌", key=f"del_{nome}"):
-            del db[nome]
-            save_json(DB_FILE, db)
-            st.rerun()
+        save_json(HISTORY_FILE, history)
+        st.image(img_np, use_column_width=True)
 
 # =====================
 # HISTÓRICO
