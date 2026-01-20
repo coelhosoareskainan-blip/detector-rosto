@@ -18,13 +18,13 @@ st.title("🧠 Reconhecimento Facial (IA Real)")
 DB_FILE = "data/faces.json"
 HISTORY_FILE = "history.json"
 
-LIMIAR = 0.25
-CONF_MINIMA = 80.0
+LIMIAR = 0.35
+CONF_MINIMA = 70.0
 
 os.makedirs("data", exist_ok=True)
 
 # =====================
-# UTILIDADES JSON
+# JSON
 # =====================
 
 def load_json(path, default):
@@ -41,7 +41,7 @@ db = load_json(DB_FILE, {})
 history = load_json(HISTORY_FILE, [])
 
 # =====================
-# HAAR CASCADE
+# CASCADE
 # =====================
 
 face_cascade = cv2.CascadeClassifier(
@@ -53,7 +53,7 @@ if face_cascade.empty():
     st.stop()
 
 # =====================
-# FUNÇÕES AUXILIARES
+# FUNÇÕES
 # =====================
 
 def detectar_rostos(img_rgb):
@@ -71,7 +71,6 @@ def distancia(a, b):
 def crop_face(img_rgb, box):
     x, y, w, h = box
     face = img_rgb[y:y+h, x:x+w]
-
     pil = Image.fromarray(face)
     buf = BytesIO()
     pil.save(buf, format="JPEG")
@@ -79,7 +78,7 @@ def crop_face(img_rgb, box):
     return buf
 
 # =====================
-# CADASTRO DE ROSTO
+# CADASTRO
 # =====================
 
 st.header("🅱️ Cadastro de rosto")
@@ -100,12 +99,14 @@ if arquivo and nome:
     if len(faces) == 0:
         st.error("❌ Nenhum rosto detectado.")
     else:
-        embeddings = get_embeddings(arquivo)
+        # 👉 CORREÇÃO AQUI
+        x, y, w, h = faces[0]
+        face_file = crop_face(img_np, (x, y, w, h))
+        embeddings = get_embeddings(face_file)
 
         if not embeddings:
             st.error("❌ IA não conseguiu extrair embedding.")
         else:
-            # cadastra apenas UM embedding por pessoa
             db[nome] = embeddings[0]
             save_json(DB_FILE, db)
 
@@ -116,7 +117,7 @@ if arquivo and nome:
             st.image(img_np, use_column_width=True)
 
 # =====================
-# RECONHECIMENTO FACIAL
+# RECONHECIMENTO
 # =====================
 
 st.divider()
@@ -142,10 +143,6 @@ if arquivo2:
         else:
             for (x, y, w, h) in faces:
 
-                # ignora detecção lixo
-                if w < 100 or h < 100:
-                    continue
-
                 face_file = crop_face(img_np, (x, y, w, h))
                 embeddings = get_embeddings(face_file)
 
@@ -162,36 +159,21 @@ if arquivo2:
                 resultados.sort(key=lambda x: x[1])
 
                 melhor_nome, melhor_dist = resultados[0]
-                segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
-
                 confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
-                desconhecido = (
-                    melhor_dist > LIMIAR or
-                    confianca < CONF_MINIMA or
-                    abs(segundo_dist - melhor_dist) < 0.05
-                )
-
-                if desconhecido:
-                    nome_final = "Desconhecido"
+                if melhor_dist > LIMIAR or confianca < CONF_MINIMA:
                     label = "DESCONHECIDO"
                     cor = (255, 0, 0)
+                    nome_final = "Desconhecido"
                     confianca = 0.0
                 else:
-                    nome_final = melhor_nome
                     label = f"{melhor_nome} ({confianca:.1f}%)"
                     cor = (0, 255, 0)
+                    nome_final = melhor_nome
 
                 cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
-                cv2.putText(
-                    img_np,
-                    label,
-                    (x, y-10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
-                    cor,
-                    2
-                )
+                cv2.putText(img_np, label, (x, y-10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2)
 
                 history.append({
                     "nome": nome_final,
@@ -211,18 +193,9 @@ st.divider()
 st.header("📊 Dashboard")
 
 if not db:
-    st.info("Nenhum rosto cadastrado ainda.")
+    st.info("Nenhum rosto cadastrado.")
 else:
     st.write(f"Total de rostos cadastrados: {len(db)}")
-
-    for nome in list(db.keys()):
-        col1, col2 = st.columns([4, 1])
-        col1.write(nome)
-
-        if col2.button("❌", key=f"del_{nome}"):
-            del db[nome]
-            save_json(DB_FILE, db)
-            st.rerun()
 
 # =====================
 # HISTÓRICO
@@ -231,28 +204,5 @@ else:
 st.divider()
 st.header("🕒 Histórico")
 
-if not history:
-    st.info("Nenhum reconhecimento ainda.")
-else:
-    for item in reversed(history[-10:]):
-        st.write(f"👤 {item['nome']} | {item['confianca']}% | {item['data']}")
-
-# =====================
-# TESTE DA IA
-# =====================
-
-st.divider()
-st.header("🧪 Teste da IA")
-
-teste_img = st.file_uploader(
-    "Envie uma imagem para teste",
-    ["jpg", "jpeg", "png"],
-    key="teste_ia"
-)
-
-if teste_img:
-    vecs = get_embeddings(teste_img)
-    if vecs:
-        st.success(f"✅ IA OK | {len(vecs)} rosto(s) detectado(s)")
-    else:
-        st.error("❌ IA NÃO RETORNOU EMBEDDING")
+for item in reversed(history[-10:]):
+    st.write(f"👤 {item['nome']} | {item['confianca']}% | {item['data']}")
