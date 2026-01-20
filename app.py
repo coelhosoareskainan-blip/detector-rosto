@@ -1,10 +1,10 @@
-from deepface import DeepFace
 import streamlit as st
 import numpy as np
 from PIL import Image
 import json
 import os
 import cv2
+from deepface import DeepFace
 
 # =====================
 # CONFIG
@@ -18,10 +18,10 @@ os.makedirs("data", exist_ok=True)
 
 MODEL_NAME = "ArcFace"
 DETECTOR = "retinaface"
-DIST_THRESHOLD = 0.35  # 🔥 nível policial
+DIST_THRESHOLD = 0.35  # 🔥 nível policial / iPhone
 
 # =====================
-# DB
+# BANCO
 # =====================
 
 def load_db():
@@ -53,7 +53,8 @@ if arquivo and nome:
             img_path=img,
             model_name=MODEL_NAME,
             detector_backend=DETECTOR,
-            enforce_detection=True
+            enforce_detection=True,
+            align=True
         )
 
         if nome not in db:
@@ -63,10 +64,10 @@ if arquivo and nome:
             db[nome].append(r["embedding"])
 
         save_db(db)
-        st.success(f"✅ {nome} cadastrado ({len(reps)} rosto(s))")
+        st.success(f"✅ {nome} cadastrado com sucesso ({len(reps)} rosto)")
 
     except Exception as e:
-        st.error("❌ Erro no cadastro")
+        st.error("❌ Erro ao cadastrar rosto")
         st.code(str(e))
 
 # =====================
@@ -108,23 +109,24 @@ if arquivo2 and db:
 
             for nome_db, embs in db.items():
                 for emb_db in embs:
-                    d = np.dot(rep, emb_db) / (
+                    cos = np.dot(rep, emb_db) / (
                         np.linalg.norm(rep) * np.linalg.norm(emb_db)
                     )
-                    dist = 1 - d  # cosine distance
+                    dist = 1 - cos
 
                     if dist < melhor_dist:
                         melhor_dist = dist
                         melhor_nome = nome_db
 
             if melhor_dist <= DIST_THRESHOLD:
-                label = f"{melhor_nome}"
+                label = melhor_nome
                 cor = (0, 255, 0)
             else:
                 label = "DESCONHECIDO"
                 cor = (255, 0, 0)
 
             x, y, w, h = region["x"], region["y"], region["w"], region["h"]
+
             cv2.rectangle(img, (x, y), (x+w, y+h), cor, 2)
             cv2.putText(
                 img,
@@ -141,3 +143,6 @@ if arquivo2 and db:
     except Exception as e:
         st.error("❌ Erro no reconhecimento")
         st.code(str(e))
+
+elif arquivo2 and not db:
+    st.warning("⚠️ Nenhuma pessoa cadastrada ainda")
