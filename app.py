@@ -102,8 +102,12 @@ if arquivo and nome:
         if emb is None:
             st.error("❌ IA não conseguiu extrair o rosto.")
         else:
-            db[nome] = emb
-            save_json(DB_FILE, db)
+            if nome not in db:
+                db[nome] = []
+                
+                db[nome].append(emb)
+                save_json(DB_FILE, db)
+
 
             for (x, y, w, h) in faces:
                 cv2.rectangle(img_np, (x, y), (x+w, y+h), (0, 255, 0), 2)
