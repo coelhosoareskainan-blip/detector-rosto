@@ -11,18 +11,19 @@ API_SECRET = os.getenv("FACEPP_API_SECRET")
 
 API_URL = "https://api-us.faceplusplus.com/facepp/v3/detect"
 
-# =====================
-# FUNÇÃO PRINCIPAL
-# =====================
+# =====================================================
+# FUNÇÃO NOVA — MULTI-ROSTO (SUBSTITUI A ANTIGA)
+# =====================================================
 
-def get_embedding(uploaded_file):
+def get_embeddings(uploaded_file):
     """
-    Retorna um vetor normalizado (list[float]) ou None
+    Retorna uma LISTA de vetores normalizados
+    Um vetor por rosto detectado
     """
 
     # 1. validar credenciais
     if not API_KEY or not API_SECRET:
-        return None
+        return []
 
     # 2. montar request
     files = {
@@ -38,40 +39,44 @@ def get_embedding(uploaded_file):
     try:
         response = requests.post(API_URL, files=files, data=data, timeout=15)
     except Exception:
-        return None
+        return []
 
     if response.status_code != 200:
-        return None
+        return []
 
     result = response.json()
 
     # 3. validar resposta
     if "faces" not in result or len(result["faces"]) == 0:
-        return None
+        return []
 
-    if "landmark" not in result["faces"][0]:
-        return None
+    embeddings = []
 
-    # 4. extrair landmarks
-    landmarks = result["faces"][0]["landmark"]
+    # 4. extrair landmarks de TODOS os rostos
+    for face in result["faces"]:
+        if "landmark" not in face:
+            continue
 
-    embedding = []
-    for point in landmarks.values():
-        embedding.append(float(point["x"]))
-        embedding.append(float(point["y"]))
+        landmarks = face["landmark"]
 
-    if len(embedding) == 0:
-        return None
+        embedding = []
+        for point in landmarks.values():
+            embedding.append(float(point["x"]))
+            embedding.append(float(point["y"]))
 
-    vec = np.array(embedding, dtype=np.float32)
+        if len(embedding) == 0:
+            continue
 
-    # =====================
-    # NORMALIZAÇÃO (ESSENCIAL)
-    # =====================
-    norm = np.linalg.norm(vec)
-    if norm == 0:
-        return None
+        vec = np.array(embedding, dtype=np.float32)
 
-    vec = vec / norm
+        # =====================
+        # NORMALIZAÇÃO (ESSENCIAL)
+        # =====================
+        norm = np.linalg.norm(vec)
+        if norm == 0:
+            continue
 
-    return vec.tolist()
+        vec = vec / norm
+        embeddings.append(vec.tolist())
+
+    return embeddings
