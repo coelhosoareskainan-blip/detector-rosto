@@ -97,14 +97,15 @@ if arquivo and nome:
     if len(faces) == 0:
         st.error("❌ Nenhum rosto detectado.")
     else:
-        emb = get_embedding(arquivo)
-
-        if emb is None:
+        embeddings = get_embeddings(arquivo)
+        
+        if not embeddings:
             st.error("❌ IA não conseguiu extrair o rosto.")
         else:
-            if nome not in db:
-                db[nome] = []
-                
+    # usa APENAS o primeiro rosto no cadastro
+            db[nome] = embeddings[0]
+            save_json(DB_FILE, db)
+
                 db[nome].append(emb)
                 save_json(DB_FILE, db)
 
