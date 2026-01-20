@@ -18,13 +18,13 @@ st.title("🧠 Reconhecimento Facial (IA Real)")
 DB_FILE = "data/faces.json"
 HISTORY_FILE = "history.json"
 
-LIMIAR = 0.35
-CONF_MINIMA = 70.0
+LIMIAR = 0.25
+CONF_MINIMA = 80.0
 
 os.makedirs("data", exist_ok=True)
 
 # =====================
-# JSON
+# UTILIDADES JSON
 # =====================
 
 def load_json(path, default):
@@ -41,7 +41,7 @@ db = load_json(DB_FILE, {})
 history = load_json(HISTORY_FILE, [])
 
 # =====================
-# CASCADE
+# HAAR CASCADE
 # =====================
 
 face_cascade = cv2.CascadeClassifier(
@@ -53,7 +53,7 @@ if face_cascade.empty():
     st.stop()
 
 # =====================
-# FUNÇÕES
+# FUNÇÕES AUXILIARES
 # =====================
 
 def detectar_rostos(img_rgb):
@@ -78,7 +78,7 @@ def crop_face(img_rgb, box):
     return buf
 
 # =====================
-# CADASTRO
+# CADASTRO DE ROSTO (CORRIGIDO)
 # =====================
 
 st.header("🅱️ Cadastro de rosto")
@@ -99,7 +99,7 @@ if arquivo and nome:
     if len(faces) == 0:
         st.error("❌ Nenhum rosto detectado.")
     else:
-        # 👉 CORREÇÃO AQUI
+        # 🔥 CORREÇÃO REAL: cadastra usando ROSTO RECORTADO
         x, y, w, h = faces[0]
         face_file = crop_face(img_np, (x, y, w, h))
         embeddings = get_embeddings(face_file)
@@ -117,7 +117,7 @@ if arquivo and nome:
             st.image(img_np, use_column_width=True)
 
 # =====================
-# RECONHECIMENTO
+# RECONHECIMENTO FACIAL (MÚLTIPLOS ROSTOS)
 # =====================
 
 st.divider()
@@ -157,8 +157,8 @@ if arquivo2:
                     resultados.append((nome_db, d))
 
                 resultados.sort(key=lambda x: x[1])
-
                 melhor_nome, melhor_dist = resultados[0]
+
                 confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
 
                 if melhor_dist > LIMIAR or confianca < CONF_MINIMA:
@@ -172,8 +172,15 @@ if arquivo2:
                     nome_final = melhor_nome
 
                 cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
-                cv2.putText(img_np, label, (x, y-10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2)
+                cv2.putText(
+                    img_np,
+                    label,
+                    (x, y-10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    cor,
+                    2
+                )
 
                 history.append({
                     "nome": nome_final,
@@ -184,18 +191,6 @@ if arquivo2:
 
             save_json(HISTORY_FILE, history)
             st.image(img_np, use_column_width=True)
-
-# =====================
-# DASHBOARD
-# =====================
-
-st.divider()
-st.header("📊 Dashboard")
-
-if not db:
-    st.info("Nenhum rosto cadastrado.")
-else:
-    st.write(f"Total de rostos cadastrados: {len(db)}")
 
 # =====================
 # HISTÓRICO
