@@ -1,4 +1,4 @@
-from services.face_api import get_embedding
+from services.face_api import get_embeddings
 import streamlit as st
 import numpy as np
 from PIL import Image
