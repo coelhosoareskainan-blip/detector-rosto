@@ -151,7 +151,26 @@ if arquivo2 and db:
             )
 
             for (x, y, w, h) in faces:
-                cv2.rectangle(img_np, (x, y), (x+w, y+h), (0, 255, 0), 2)
+                if DESCONHECIDO:
+                    cor = (255, 0, 0)  # vermelho
+                    label = "DESCONHECIDO"
+                else:
+                    cor = (0, 255, 0)  # verde
+                    label = f"{melhor_nome} ({confianca:.1f}%)"
+                    
+                cv2.rectangle(img_np, (x, y), (x + w, y + h), cor, 2)
+                
+                cv2.putText(
+                    img_np,
+                    label,
+                    (x, y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.9,
+                    cor,
+                    2,
+                    cv2.LINE_AA
+                )
+
 
             if DESCONHECIDO:
                 melhor_nome = "Desconhecido"
