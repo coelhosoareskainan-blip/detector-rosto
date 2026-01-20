@@ -6,6 +6,7 @@ import os
 import cv2
 import json
 from datetime import datetime
+from io import BytesIO
 
 # =====================
 # CONFIG
