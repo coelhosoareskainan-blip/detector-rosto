@@ -68,7 +68,6 @@ def distancia(a, b):
 def crop_face(img_rgb, box):
     x, y, w, h = box
     face = img_rgb[y:y+h, x:x+w]
-
     pil = Image.fromarray(face)
     buf = BytesIO()
     pil.save(buf, format="JPEG")
@@ -98,17 +97,13 @@ if arquivo and nome:
         st.error("❌ Nenhum rosto detectado.")
     else:
         embeddings = get_embeddings(arquivo)
-        
+
         if not embeddings:
             st.error("❌ IA não conseguiu extrair o rosto.")
         else:
-    # usa APENAS o primeiro rosto no cadastro
+            # cadastro usa apenas o PRIMEIRO rosto
             db[nome] = embeddings[0]
             save_json(DB_FILE, db)
-
-                db[nome].append(emb)
-                save_json(DB_FILE, db)
-
 
             for (x, y, w, h) in faces:
                 cv2.rectangle(img_np, (x, y), (x+w, y+h), (0, 255, 0), 2)
@@ -143,55 +138,54 @@ if arquivo2:
         else:
             for (x, y, w, h) in faces:
                 face_file = crop_face(img_np, (x, y, w, h))
-                emb = get_embedding(face_file)
+                embeddings = get_embeddings(face_file)
 
-                if emb is None:
+                if not embeddings:
                     label = "ERRO"
                     cor = (0, 0, 255)
-                    cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
-                    continue
-
-                resultados = []
-
-                for nome_db, emb_db in db.items():
-                    d = distancia(emb, emb_db)
-                    resultados.append((nome_db, d))
-
-                resultados.sort(key=lambda x: x[1])
-
-                melhor_nome, melhor_dist = resultados[0]
-                segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
-
-                confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
-
-                DESCONHECIDO = (
-                    melhor_dist > LIMIAR or
-                    confianca < CONF_MINIMA or
-                    abs(segundo_dist - melhor_dist) < 0.05
-                )
-
-                if DESCONHECIDO:
-                    nome_final = "Desconhecido"
-                    label = "DESCONHECIDO"
-                    cor = (255, 0, 0)
-                    confianca = 0.0
                 else:
-                    nome_final = melhor_nome
-                    label = f"{melhor_nome} ({confianca:.1f}%)"
-                    cor = (0, 255, 0)
+                    emb = embeddings[0]
+                    resultados = []
+
+                    for nome_db, emb_db in db.items():
+                        d = distancia(emb, emb_db)
+                        resultados.append((nome_db, d))
+
+                    resultados.sort(key=lambda x: x[1])
+
+                    melhor_nome, melhor_dist = resultados[0]
+                    segundo_dist = resultados[1][1] if len(resultados) > 1 else 1.0
+
+                    confianca = max(0, (1 - melhor_dist / LIMIAR)) * 100
+
+                    DESCONHECIDO = (
+                        melhor_dist > LIMIAR or
+                        confianca < CONF_MINIMA or
+                        abs(segundo_dist - melhor_dist) < 0.05
+                    )
+
+                    if DESCONHECIDO:
+                        label = "DESCONHECIDO"
+                        cor = (255, 0, 0)
+                        nome_final = "Desconhecido"
+                        confianca = 0.0
+                    else:
+                        label = f"{melhor_nome} ({confianca:.1f}%)"
+                        cor = (0, 255, 0)
+                        nome_final = melhor_nome
+
+                    history.append({
+                        "nome": nome_final,
+                        "confianca": round(confianca, 1),
+                        "distancia": round(melhor_dist, 3),
+                        "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+                    })
 
                 cv2.rectangle(img_np, (x, y), (x+w, y+h), cor, 2)
                 cv2.putText(
                     img_np, label, (x, y-10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.9, cor, 2
                 )
-
-                history.append({
-                    "nome": nome_final,
-                    "confianca": round(confianca, 1),
-                    "distancia": round(melhor_dist, 3),
-                    "data": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-                })
 
             save_json(HISTORY_FILE, history)
             st.image(img_np, use_column_width=True)
@@ -244,8 +238,8 @@ teste_img = st.file_uploader(
 )
 
 if teste_img:
-    vec = get_embedding(teste_img)
-    if vec:
-        st.success(f"✅ IA OK | vetor com {len(vec)} números")
+    vecs = get_embeddings(teste_img)
+    if vecs:
+        st.success(f"✅ IA OK | {len(vecs)} rosto(s) detectado(s)")
     else:
         st.error("❌ IA NÃO RETORNOU VETOR")
